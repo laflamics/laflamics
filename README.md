@@ -356,3 +356,335 @@ function logOperation(bytes memory data) internal {
 3. Dynamic Analysis
 4. Symbolic Execution
 5. Manual Review 
+
+## Local Testing & Exploit Simulation 🎯
+
+### Setup Local Environment
+```bash
+# 1. Setup Hardhat Local Node
+npm install --save-dev hardhat
+npx hardhat node  # Run local node
+
+# 2. Setup Foundry
+forge init
+anvil  # Run local node
+
+# 3. Setup Ganache (Alternative)
+npm install -g ganache
+ganache-cli --fork https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY  # Fork mainnet
+```
+
+### Fork Mainnet untuk Testing
+```solidity
+// Script buat fork mainnet di Hardhat
+require("@nomiclabs/hardhat-waffle");
+
+module.exports = {
+  networks: {
+    hardhat: {
+      forking: {
+        url: "https://eth-mainnet.alchemyapi.io/v2/YOUR_KEY",
+        blockNumber: 15000000 // Specific block for consistent testing
+      }
+    }
+  }
+};
+```
+
+### Quick Exploit Template
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "forge-std/Test.sol";
+import "./Interface.sol";
+
+contract ExploitTest is Test {
+    IERC20 token;
+    address victim;
+    address attacker;
+    
+    function setUp() public {
+        // Fork mainnet at specific block
+        vm.createSelectFork("mainnet", 15000000);
+        
+        token = IERC20(address(0x...));
+        victim = address(0x...);
+        attacker = address(0x1337);
+        
+        // Fund attacker
+        vm.deal(attacker, 100 ether);
+        // Impersonate account if needed
+        vm.prank(victim);
+    }
+    
+    function testExploit() public {
+        // Setup initial state
+        vm.startPrank(attacker);
+        
+        // 1. Setup flash loan if needed
+        // 2. Execute attack steps
+        // 3. Verify exploit success
+        
+        vm.stopPrank();
+        
+        // Assert our success conditions
+        assertGt(token.balanceOf(attacker), 0);
+    }
+}
+```
+
+### Simulation Tools & Techniques
+
+#### 1. Tenderly Simulation
+```javascript
+// Script buat simulate transaction
+const simulation = await tenderly.simulate({
+    network_id: '1',
+    from: attacker,
+    to: victim,
+    input: encodedCalldata,
+    gas: 8000000,
+    gas_price: '0',
+    value: '1000000000000000000' // 1 ETH
+});
+```
+
+#### 2. Foundry Invariant Testing
+```solidity
+function invariant_totalSupply() public {
+    // This should always be true
+    assertEq(token.totalSupply(), INITIAL_SUPPLY);
+}
+
+function invariant_balanceSum() public {
+    uint256 total;
+    for(uint i = 0; i < actors.length; i++) {
+        total += token.balanceOf(actors[i]);
+    }
+    assertEq(total, token.totalSupply());
+}
+```
+
+#### 3. Echidna Property Testing
+```solidity
+contract TokenTest {
+    Token token;
+    address victim;
+    
+    constructor() public {
+        token = new Token();
+        victim = address(0x1);
+    }
+    
+    function echidna_balance_under_threshold() public view returns (bool) {
+        return token.balanceOf(victim) <= THRESHOLD;
+    }
+}
+```
+
+### Quick Debug Tools
+
+#### 1. Hardhat Console
+```solidity
+import "hardhat/console.sol";
+
+contract Exploit {
+    function attack() public {
+        console.log("Attacker balance:", token.balanceOf(msg.sender));
+        console.log("Block number:", block.number);
+    }
+}
+```
+
+#### 2. Foundry Traces
+```bash
+forge test -vvv  # Detailed traces
+forge test --debug "testExploit"  # Interactive debugger
+```
+
+#### 3. Memory Dumps
+```solidity
+function dumpState() internal {
+    bytes32 slot = keccak256(abi.encodePacked(key));
+    bytes32 value = vm.load(address(target), slot);
+    console.logBytes32(value);
+}
+```
+
+### Time-saving Tips 💡
+
+1. **Quick Contract Creation:**
+```solidity
+// Deploy dengan minimal proxy
+function cloneContract(address implementation) internal returns (address) {
+    bytes20 targetBytes = bytes20(implementation);
+    address clone = address(uint160(uint256(keccak256(abi.encodePacked(
+        hex"3d602d80600a3d3981f3363d3d373d3d3d363d73",
+        targetBytes,
+        hex"5af43d82803e903d91602b57fd5bf3"
+    )))));
+    return clone;
+}
+```
+
+2. **Flash Setup:**
+```solidity
+// Quick flash loan setup
+interface IFlashloan {
+    function flashLoan(
+        address receiver,
+        address token,
+        uint256 amount,
+        bytes calldata params
+    ) external;
+}
+
+// Dalam test:
+function setUp() public {
+    flashlender = IFlashloan(FLASHLOAN_ADDRESS);
+    vm.deal(address(this), 1 ether); // Gas
+}
+```
+
+3. **State Manipulation:**
+```solidity
+// Manipulate contract state langsung
+function changeState() internal {
+    vm.store(
+        address(target),
+        bytes32(uint256(1)), // slot
+        bytes32(uint256(1337)) // new value
+    );
+}
+```
+
+4. **Quick Assert Template:**
+```solidity
+modifier assertInvariant() {
+    _;
+    // Quick check semua invariant
+    assertGt(attacker.balance, initialBalance);
+    assertEq(victim.balance, 0);
+    assertTrue(success);
+}
+``` 
+
+testnet 
+
+# 1. Setup Multi-testnet Environment
+npm install -g @truffle/hdwallet-provider
+
+# Quick script buat deploy ke berbagai testnet
+networks: {
+    sepolia: {
+        url: "https://sepolia.infura.io/v3/YOUR_KEY",
+        accounts: [PRIVATE_KEY]
+    },
+    goerli: {
+        url: "https://goerli.infura.io/v3/YOUR_KEY",
+        accounts: [PRIVATE_KEY]
+    },
+    mumbai: {
+        url: "https://polygon-mumbai.infura.io/v3/YOUR_KEY",
+        accounts: [PRIVATE_KEY]
+    }
+}
+
+
+template POC :
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract TestnetPOC {
+    // Addresses di testnet
+    address constant VICTIM = 0x...;
+    address constant FLASHLOAN = 0x...;
+    
+    constructor() {
+        // Setup initial state
+    }
+    
+    function proveVulnerability() external {
+        // 1. Setup preconditions
+        require(IERC20(token).balanceOf(address(this)) == 0, "Start with 0");
+        
+        // 2. Execute exploit
+        // ... exploit code ...
+        
+        // 3. Prove success
+        require(IERC20(token).balanceOf(address(this)) > 0, "Exploit success");
+        
+        // 4. Log everything
+        emit ExploitSuccess(
+            block.number,
+            block.timestamp,
+            msg.sender,
+            IERC20(token).balanceOf(address(this))
+        );
+    }
+}
+
+Auto Documentation Generator:
+event ExploitStep(
+    uint256 indexed step,
+    string description,
+    bytes data
+);
+
+function documentStep(uint256 step, string memory desc, bytes memory data) internal {
+    emit ExploitStep(step, desc, data);
+    
+    // Juga log ke console buat debugging
+    console.log("Step %s: %s", step, desc);
+    console.logBytes(data);
+}
+
+Quick Testnet Tools:
+// Script buat auto-verify contract
+async function verifyContract() {
+    await hre.run("verify:verify", {
+        address: deployedAddress,
+        constructorArguments: [],
+    });
+}
+
+// Auto faucet requester
+async function getFaucetTokens() {
+    const faucets = {
+        'sepolia': 'https://faucet.sepolia.dev',
+        'mumbai': 'https://faucet.polygon.technology'
+    };
+    // Auto request tokens
+}
+
+Pro tips buat handle klien:
+Dokumentasi yang Rapi
+
+## Proof of Concept
+- Network: Sepolia
+- Block: 12345678
+- Transaction: 0x...
+- Contract: 0x...
+
+## Steps to Reproduce:
+1. Deploy POC contract
+2. Call proveVulnerability()
+3. Check emitted events
+
+Video Recording:
+# Record terminal
+asciinema rec exploit-demo.cast
+
+# Convert ke gif
+agg exploit-demo.cast exploit-demo.gif
+
+Automated Testing:
+// Script buat auto test di multiple testnet
+async function testAllNetworks() {
+    const networks = ['sepolia', 'goerli', 'mumbai'];
+    for (let net of networks) {
+        console.log(`Testing on ${net}...`);
+        await deployAndTest(net);
+    }
+}
